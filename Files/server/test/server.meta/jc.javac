@@ -143,7 +143,8 @@ public class server extends Component {
 
   // reenvia msg para todos exceto sender (se sender == null envia para todos)
   private void broadcast(String msg, Socket sender) {
-    String full = (sender == null ? "" : sender.getInetAddress().toString() + ": ") + msg + "\n";
+    //String full = (sender == null ? "" : sender.getInetAddress().toString() + ": ") + msg + "\n";
+    String full = msg + "\n";
     byte[] data;
     try {
       data = full.getBytes("UTF-8");
