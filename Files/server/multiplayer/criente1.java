@@ -7,10 +7,13 @@ public class criente1 extends Component {
   private int port = 5000, maxPlayer = 10, myId = 0;
   Socket socket;
   private volatile boolean connected = false;
-  private SpatialObject localPlayer;
-  ObjectFile localplay;
+  private volatile float posx, posy, posz;
+  public SpatialObject localPlayer;
+  public ObjectFile localplay, amigo;
   private int[] remoteId = new int[maxPlayer];
+  private String[] remoteName = new String[maxPlayer];
   private SpatialObject[] remotePlay = new SpatialObject[maxPlayer];
+  private ConcurrentHashMap<Integer, float[]> posCache = new ConcurrentHashMap<Integer, float[]>();
 
   private SUIText txts;
   private server1 checkServe;
@@ -102,7 +105,7 @@ public class criente1 extends Component {
             if (connected) {
               txts.setText("IP: " + socket.getInetAddress().getHostAddress());
               startListening();
-            } 
+            }
           }
         });
   }
@@ -116,8 +119,6 @@ public class criente1 extends Component {
               String line;
 
               while (connected && (line = rend.readLine()) != null) {
-                //Thread.sleep(1);
-                //return line;
                 processServ(line);
               }
             } catch (Exception e) {
@@ -127,10 +128,7 @@ public class criente1 extends Component {
           }
 
           public void onEngine(Object result) {
-            if (result != null && connected) {
-              String message = (String) result;
-              startListening();
-            }
+            if (result != null && connected) Console.log(result.toString());
           }
         });
   }
@@ -138,47 +136,59 @@ public class criente1 extends Component {
   private void processServ(String txt) {
     if (txt.startsWith("id:")) {
       myId = Integer.parseInt(txt.substring(3));
-      localPlayer = myObject.instantiate(localplay);
-      localPlayer.setPosition(0, 1, 0);
-      localPlayer.setName(nome);
-
-      // Envio de posição inline
       new AsyncTask(
           new AsyncRunnable() {
             public Object onBackground(Object input) {
-              try {
-                while (connected) {
-                  float x = localPlayer.getPosition().x;
-                  float y = localPlayer.getPosition().y;
-                  float z = localPlayer.getPosition().z;
-                  String posMsg = "pos:" + myId + ":" + x + ":" + y + ":" + z;
-                  OutputStream out = socket.getOutputStream();
-                  out.write((posMsg + "\n").getBytes("UTF-8"));
-                  out.flush();
-                  Thread.sleep(50);
-                }
-              } catch (Exception e) {
-                desconnect();
-              }
               return null;
             }
 
-            public void onEngine(Object result) {}
+            public void onEngine(Object result) {
+              localPlayer = myObject.instantiate(localplay);
+              localPlayer.setPosition(0, 1, 0);
+              localPlayer.setName(nome);
+              new AsyncTask(
+                  new AsyncRunnable() {
+                    public Object onBackground(Object input) {
+                      try {
+                        while (connected && socket != null && !socket.isClosed()) {
+                          String posMsg = "pos:" + myId + ":" + posx + ":" + posy + ":" + posz;
+                          OutputStream out = socket.getOutputStream();
+                          out.write((posMsg + "\n").getBytes("UTF-8"));
+                          out.flush();
+                          Thread.sleep(50);
+                        } 
+                      } catch (Exception e) {
+                        desconnect();
+                      }
+                      return null;
+                    }
+
+                    public void onEngine(Object result) {}
+                  });
+            }
           });
 
     } else if (txt.startsWith("spaw:")) {
       handleSpawn(txt);
     } else if (txt.startsWith("pos:")) {
       handlePos(txt);
+    } else if (txt.startsWith("left:")) {
+      handleLeft(txt);
     } else {
       Toast.showText(txt, 1);
       Console.log(txt);
     }
   }
 
+  public void upMovePlay(float x, float y, float z) {
+    posx = x;
+    posy = y;
+    posz = z;
+  }
+
   private void handleSpawn(String txt) {
     String[] p = txt.split(":");
-    int id = Integer.parseInt(p[1]);
+    final int id = Integer.parseInt(p[1]);
     if (id == myId) return;
 
     int slot = -1;
@@ -189,33 +199,64 @@ public class criente1 extends Component {
       }
     }
     if (slot == -1) return;
+    final int tmpslot = slot;
+    final String nomplayer = p[2];
+    final float x = Float.parseFloat(p[3]);
+    final float y = Float.parseFloat(p[4]);
+    final float z = Float.parseFloat(p[5]);
+    new AsyncTask(
+        new AsyncRunnable() {
+          public Object onBackground(Object input) {
+            return null;
+          }
 
-    String[] posParts = new String[] {p[3], p[4], p[5]};
-    float x = Float.parseFloat(posParts[0]);
-    float y = Float.parseFloat(posParts[1]);
-    float z = Float.parseFloat(posParts[2]);
-
-    if (remotePlay[slot] == null) remotePlay[slot] = myObject.instantiate(localplay);
-    remotePlay[slot].setPosition(x, y, z);
-    remoteId[slot] = id;
+          public void onEngine(Object result) {
+            if (remotePlay[tmpslot] == null) {
+              remotePlay[tmpslot] = myObject.instantiate(amigo);
+              remotePlay[tmpslot].setName(nomplayer);
+            }
+            remotePlay[tmpslot].setPosition(x, y, z);
+            remoteId[tmpslot] = id;
+            remoteName[tmpslot] = nomplayer;
+            Toast.showText(nomplayer + " entro", 1);
+          }
+        });
   }
 
   private void handlePos(String txt) {
     String[] p = txt.split(":");
     int id = Integer.parseInt(p[1]);
     if (id == myId) return;
-    int slot = -1;
-    for (int i = 0; i < maxPlayer; i++) {
-      if (remoteId[i] == id) {
-        slot = i;
-        break;
-      }
-    }
-    if (slot == -1) return;
     float x = Float.parseFloat(p[2]);
     float y = Float.parseFloat(p[3]);
     float z = Float.parseFloat(p[4]);
-    remotePlay[slot].setPosition(x, y, z);
+    posCache.put(id, new float[] {x, y, z});
+  }
+
+  private void handleLeft(String txt) {
+    int id = Integer.parseInt(txt.substring(0));
+    for (int i = 0; i < maxPlayer; i++) {
+      if (remoteId[i] == id) {
+        final int is = i;
+        new AsyncTask(
+            new AsyncRunnable() {
+              public Object onBackground(Object input) {
+                return null;
+              }
+
+              public void onEngine(Object result) {
+                if (remotePlay[is] != null) {
+                  remotePlay[is].destroy();
+                }
+                Toast.showText(remoteName[is] + " saiu!", 1);
+                remotePlay[is] = null;
+                remoteId[is] = 0;
+                remoteName[is] = null;
+              }
+            });
+        break;
+      }
+    }
   }
 
   void desconnect() {
