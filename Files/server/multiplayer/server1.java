@@ -6,6 +6,7 @@ public class server1 extends Component {
   volatile boolean running = false, checktrue = false;
   private Socket[] clients = new Socket[maxPlayer];
   private int[] clientId = new int[maxPlayer];
+  private String[] clientName = new String[maxPlayer];
 
   void repeat() {
     if (Input.isKeyDown("serv")) {
@@ -90,6 +91,7 @@ public class server1 extends Component {
         }
         clients[i] = null;
         clientId[i] = 0;
+        clientName[i] = null;
       }
     }
     Console.log("Servidor parado e clientes desconectados.");
@@ -111,6 +113,7 @@ public class server1 extends Component {
       while (running && !client.isClosed() && (line = rend.readLine()) != null) {
         if (line.startsWith("join:")) {
           String nome = line.substring(5);
+          clientName[slot]=nome;
           sendClient(client, "id:" + clientId[slot]);
           String spaw = "spaw:" + clientId[slot] + ":" + nome + ":0:1:0";
           broadcast(spaw, null);
@@ -120,17 +123,19 @@ public class server1 extends Component {
     } catch (Exception e) {
       Console.log("Erro client: " + e.getMessage());
     } finally {
+        if(clientId[slot] !=0)broadcast("left:"+clientId[slot], null);
       try {
         clients[slot].close();
       } catch (Exception e) {
       }
       clients[slot] = null;
       clientId[slot] = 0;
+      clientName[slot]=null;
       Console.log("Cliente desconectado: " + slot);
     }
   }
 
-  private void broadcast(String msg, Socket sender) {
+  private synchronized void broadcast(String msg, Socket sender) {
     String full = msg + "\n";
     byte[] data;
     try {
@@ -143,6 +148,7 @@ public class server1 extends Component {
       if (s == null || s.isClosed()) {
         clients[i] = null;
         clientId[i] = 0;
+        clientName[i]=null;
         continue;
       }
       if (sender != null && s.equals(sender)) continue;
@@ -152,12 +158,14 @@ public class server1 extends Component {
         out.write(data);
         out.flush();
       } catch (Exception e) {
+          Console.log("Erro broadcast: " + e.getMessage());
         try {
           s.close();
         } catch (Exception es) {
         }
         clients[i] = null;
-        clientId[i] = 0;
+      clientId[i] = 0;
+      clientName[i]=null;
       }
     }
   }
