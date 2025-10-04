@@ -27,6 +27,12 @@ public class criente1 extends Component {
   void repeat() {
     Runnable r;
     while ((r = queue.poll()) != null) r.run();
+    for (int i = 0; i < maxPlayer; i++) {
+      if (remotePlay[i] != null && remoteId[i] != 0) {
+          float[] p = posCache.get(remoteId[i]);
+          if(p !=null)remotePlay[i].setPosition(p[0],p[1],p[2]);
+      }
+    }
     if (Input.isKeyDown("serv") && !checkServe.running) {
       InputDialog inputN =
           new InputDialog(
@@ -39,7 +45,7 @@ public class criente1 extends Component {
                   nome = t;
                   host = "localhost";
                   connect();
-                } 
+                }
 
                 public void onCancel() {}
               });
@@ -140,6 +146,12 @@ public class criente1 extends Component {
         });
   }
 
+  public void upMovePlay(float x, float y, float z) {
+    posx = x;
+    posy = y;
+    posz = z;
+  }
+
   private void processServ(String txt) {
     if (txt.startsWith("id:")) {
       myId = Integer.parseInt(txt.substring(3));
@@ -179,12 +191,6 @@ public class criente1 extends Component {
       Toast.showText(txt, 1);
       Console.log(txt);
     }
-  }
-
-  public void upMovePlay(float x, float y, float z) {
-    posx = x;
-    posy = y;
-    posz = z;
   }
 
   private void handleSpawn(String txt) {
