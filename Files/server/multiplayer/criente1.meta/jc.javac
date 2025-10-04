@@ -14,6 +14,7 @@ public class criente1 extends Component {
   private String[] remoteName = new String[maxPlayer];
   private SpatialObject[] remotePlay = new SpatialObject[maxPlayer];
   private ConcurrentHashMap<Integer, float[]> posCache = new ConcurrentHashMap<Integer, float[]>();
+  private Queue<Runnable> queue = new ConcurrentLinkedQueue<Runnable>();
 
   private SUIText txts;
   private server1 checkServe;
@@ -24,6 +25,8 @@ public class criente1 extends Component {
   }
 
   void repeat() {
+    Runnable r;
+    while ((r = queue.poll()) != null) r.run();
     if (Input.isKeyDown("serv") && !checkServe.running) {
       InputDialog inputN =
           new InputDialog(
@@ -36,7 +39,7 @@ public class criente1 extends Component {
                   nome = t;
                   host = "localhost";
                   connect();
-                }
+                } 
 
                 public void onCancel() {}
               });
@@ -110,6 +113,10 @@ public class criente1 extends Component {
         });
   }
 
+  private void runOnMain(Runnable r) {
+    queue.add(r);
+  }
+
   private void startListening() {
     new AsyncTask(
         new AsyncRunnable() {
@@ -136,36 +143,30 @@ public class criente1 extends Component {
   private void processServ(String txt) {
     if (txt.startsWith("id:")) {
       myId = Integer.parseInt(txt.substring(3));
-      new AsyncTask(
-          new AsyncRunnable() {
-            public Object onBackground(Object input) {
-              return null;
-            }
-
-            public void onEngine(Object result) {
-              localPlayer = myObject.instantiate(localplay);
-              localPlayer.setPosition(0, 1, 0);
-              localPlayer.setName(nome);
-              new AsyncTask(
-                  new AsyncRunnable() {
-                    public Object onBackground(Object input) {
-                      try {
-                        while (connected && socket != null && !socket.isClosed()) {
-                          String posMsg = "pos:" + myId + ":" + posx + ":" + posy + ":" + posz;
-                          OutputStream out = socket.getOutputStream();
-                          out.write((posMsg + "\n").getBytes("UTF-8"));
-                          out.flush();
-                          Thread.sleep(50);
-                        } 
-                      } catch (Exception e) {
-                        desconnect();
+      runOnMain(
+          () -> {
+            localPlayer = myObject.instantiate(localplay);
+            localPlayer.setPosition(0, 1, 0);
+            localPlayer.setName(nome);
+            new AsyncTask(
+                new AsyncRunnable() {
+                  public Object onBackground(Object input) {
+                    try {
+                      while (connected && socket != null && !socket.isClosed()) {
+                        String posMsg = "pos:" + myId + ":" + posx + ":" + posy + ":" + posz;
+                        OutputStream out = socket.getOutputStream();
+                        out.write((posMsg + "\n").getBytes("UTF-8"));
+                        out.flush();
+                        Thread.sleep(50);
                       }
-                      return null;
+                    } catch (Exception e) {
+                      desconnect();
                     }
+                    return null;
+                  }
 
-                    public void onEngine(Object result) {}
-                  });
-            }
+                  public void onEngine(Object result) {}
+                });
           });
 
     } else if (txt.startsWith("spaw:")) {
@@ -204,22 +205,16 @@ public class criente1 extends Component {
     final float x = Float.parseFloat(p[3]);
     final float y = Float.parseFloat(p[4]);
     final float z = Float.parseFloat(p[5]);
-    new AsyncTask(
-        new AsyncRunnable() {
-          public Object onBackground(Object input) {
-            return null;
+    runOnMain(
+        () -> {
+          if (remotePlay[tmpslot] == null) {
+            remotePlay[tmpslot] = myObject.instantiate(amigo);
+            remotePlay[tmpslot].setName(nomplayer);
           }
-
-          public void onEngine(Object result) {
-            if (remotePlay[tmpslot] == null) {
-              remotePlay[tmpslot] = myObject.instantiate(amigo);
-              remotePlay[tmpslot].setName(nomplayer);
-            }
-            remotePlay[tmpslot].setPosition(x, y, z);
-            remoteId[tmpslot] = id;
-            remoteName[tmpslot] = nomplayer;
-            Toast.showText(nomplayer + " entro", 1);
-          }
+          remotePlay[tmpslot].setPosition(x, y, z);
+          remoteId[tmpslot] = id;
+          remoteName[tmpslot] = nomplayer;
+          Toast.showText(nomplayer + " entrou", 1);
         });
   }
 
@@ -234,29 +229,22 @@ public class criente1 extends Component {
   }
 
   private void handleLeft(String txt) {
-    int id = Integer.parseInt(txt.substring(0));
-    for (int i = 0; i < maxPlayer; i++) {
-      if (remoteId[i] == id) {
-        final int is = i;
-        new AsyncTask(
-            new AsyncRunnable() {
-              public Object onBackground(Object input) {
-                return null;
+    final int id = Integer.parseInt(txt.substring(0));
+    runOnMain(
+        () -> {
+          for (int is = 0; is < maxPlayer; is++) {
+            if (remoteId[is] == id) {
+              if (remotePlay[is] != null) {
+                remotePlay[is].destroy();
               }
-
-              public void onEngine(Object result) {
-                if (remotePlay[is] != null) {
-                  remotePlay[is].destroy();
-                }
-                Toast.showText(remoteName[is] + " saiu!", 1);
-                remotePlay[is] = null;
-                remoteId[is] = 0;
-                remoteName[is] = null;
-              }
-            });
-        break;
-      }
-    }
+              Toast.showText(remoteName[is] + " saiu!", 1);
+              remotePlay[is] = null;
+              remoteId[is] = 0;
+              remoteName[is] = null;
+              break;
+            }
+          }
+        });
   }
 
   void desconnect() {
