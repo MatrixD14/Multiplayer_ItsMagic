@@ -7,7 +7,6 @@ public class criente1 extends Component {
   private int port = 5000, maxPlayer = 10, myId = 0;
   Socket socket;
   private volatile boolean connected = false;
-  private volatile float posx, posy, posz;
   public SpatialObject localPlayer;
   public ObjectFile localplay, amigo;
   private int[] remoteId = new int[maxPlayer];
@@ -88,7 +87,7 @@ public class criente1 extends Component {
       float[] p = entry.getValue();
       for (int i = 0; i < maxPlayer; i++) {
         if (remotePlay[i] != null && remoteId[i] == id) remotePlay[i].setPosition(p[0], p[1], p[2]);
-      } 
+      }
     }
   }
 
@@ -153,26 +152,23 @@ public class criente1 extends Component {
         });
   }
 
-  public void upMovePlay(float x, float y, float z) {
-    posx = x;
-    posy = y;
-    posz = z;
-  }
-
   private void processServ(String txt) {
     if (txt.startsWith("id:")) {
       myId = Integer.parseInt(txt.substring(3));
       runOnMain(
           () -> {
-            localPlayer = myObject.instantiate(localplay);
-            localPlayer.setPosition(0, 1, 0);
-            localPlayer.setName(nome);
+            if (localPlayer == null) {
+              localPlayer = myObject.instantiate(localplay);
+              localPlayer.setPosition(0, 1, 0);
+              localPlayer.setName(nome);
+            } 
             new AsyncTask(
                 new AsyncRunnable() {
                   public Object onBackground(Object input) {
                     try {
                       while (connected && socket != null && !socket.isClosed()) {
-                        String posMsg = "pos:" + myId + ":" + posx + ":" + posy + ":" + posz;
+                         Vector3 pos = localPlayer.getPosition();
+                        String posMsg = "pos:" + myId + ":" + pos.x + ":" + pos.y + ":" + pos.z;
                         OutputStream out = socket.getOutputStream();
                         out.write((posMsg + "\n").getBytes("UTF-8"));
                         out.flush();
