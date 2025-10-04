@@ -29,8 +29,8 @@ public class criente1 extends Component {
     while ((r = queue.poll()) != null) r.run();
     for (int i = 0; i < maxPlayer; i++) {
       if (remotePlay[i] != null && remoteId[i] != 0) {
-          float[] p = posCache.get(remoteId[i]);
-          if(p !=null)remotePlay[i].setPosition(p[0],p[1],p[2]);
+        float[] p = posCache.get(remoteId[i]);
+        if (p != null) remotePlay[i].setPosition(p[0], p[1], p[2]);
       }
     }
     if (Input.isKeyDown("serv") && !checkServe.running) {
@@ -82,6 +82,13 @@ public class criente1 extends Component {
                   public void onCancel() {}
                 });
       }
+    }
+    for (Map.Entry<Integer, float[]> entry : posCache.entrySet()) {
+      int id = entry.getKey();
+      float[] p = entry.getValue();
+      for (int i = 0; i < maxPlayer; i++) {
+        if (remotePlay[i] != null && remoteId[i] == id) remotePlay[i].setPosition(p[0], p[1], p[2]);
+      } 
     }
   }
 
