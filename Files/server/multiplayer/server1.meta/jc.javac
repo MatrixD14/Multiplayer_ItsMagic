@@ -123,8 +123,8 @@ public class server1 extends Component {
           }
           String spaw = "spaw:" + clientId[slot] + ":" + nome + ":0:1:0";
           broadcast(spaw, client);
-        } else if (line.startsWith("pos:")) broadcast(line, client);
-        else if (line.startsWith("rot:")) broadcast(line, client);
+        } else if(line.startsWith("pos:")|| line.startsWith("rot")) broadcast(line, client);
+        else if (!line.startsWith("join:")) broadcast(line, client);
         broadcast(line, client);
       } 
     } catch (Exception e) {
