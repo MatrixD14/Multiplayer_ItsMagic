@@ -9,27 +9,33 @@ public class criente1 extends Component {
   private volatile boolean connected = false;
   public SpatialObject localPlayer;
   public ObjectFile localplay, amigo;
-  private int[] remoteId = new int[maxPlayer];
-  private String[] remoteName = new String[maxPlayer];
-  private SpatialObject[] remotePlay = new SpatialObject[maxPlayer];
-  private ConcurrentHashMap<Integer, float[]> posCache = new ConcurrentHashMap<Integer, float[]>();
+  private int[] remoteId;
+  private String[] remoteName;
+  private SpatialObject[] remotePlay;
+  float[][] posCache, rotCache;
   private Queue<Runnable> queue = new ConcurrentLinkedQueue<Runnable>();
 
   private SUIText txts;
   private server1 checkServe;
 
   void start() {
+    if (maxPlayer <= 0) maxPlayer = 10;
+    remoteId = new int[maxPlayer];
+    remoteName = new String[maxPlayer];
+    remotePlay = new SpatialObject[maxPlayer];
+    posCache = new float[maxPlayer][3];
+    rotCache = new float[maxPlayer][3];
     txts = WorldController.findObject("Ip").findComponent("suitext");
     checkServe = myObject.findComponent("server1");
-  }
+  } 
 
   void repeat() {
     Runnable r;
     while ((r = queue.poll()) != null) r.run();
     for (int i = 0; i < maxPlayer; i++) {
       if (remotePlay[i] != null && remoteId[i] != 0) {
-        float[] p = posCache.get(remoteId[i]);
-        if (p != null) remotePlay[i].setPosition(p[0], p[1], p[2]);
+        remotePlay[i].setPosition(posCache[i][0], posCache[i][1], posCache[i][2]);
+        remotePlay[i].setRotation(rotCache[i][0], rotCache[i][1], rotCache[i][2]);
       }
     }
     if (Input.isKeyDown("serv") && !checkServe.running) {
@@ -80,13 +86,6 @@ public class criente1 extends Component {
 
                   public void onCancel() {}
                 });
-      }
-    }
-    for (Map.Entry<Integer, float[]> entry : posCache.entrySet()) {
-      int id = entry.getKey();
-      float[] p = entry.getValue();
-      for (int i = 0; i < maxPlayer; i++) {
-        if (remotePlay[i] != null && remoteId[i] == id) remotePlay[i].setPosition(p[0], p[1], p[2]);
       }
     }
   }
@@ -161,16 +160,19 @@ public class criente1 extends Component {
               localPlayer = myObject.instantiate(localplay);
               localPlayer.setPosition(0, 1, 0);
               localPlayer.setName(nome);
-            } 
+            }
             new AsyncTask(
                 new AsyncRunnable() {
                   public Object onBackground(Object input) {
                     try {
                       while (connected && socket != null && !socket.isClosed()) {
-                         Vector3 pos = localPlayer.getPosition();
+                        Vector3 pos = localPlayer.getPosition();
+                        Quaternion rot = localPlayer.getRotation();
                         String posMsg = "pos:" + myId + ":" + pos.x + ":" + pos.y + ":" + pos.z;
+                        String rotMsg = "rot:" + myId + ":" + rot.x + ":" + rot.y + ":" + rot.z;
                         OutputStream out = socket.getOutputStream();
                         out.write((posMsg + "\n").getBytes("UTF-8"));
+                        out.write((rotMsg + "\n").getBytes("UTF-8"));
                         out.flush();
                         Thread.sleep(50);
                       }
@@ -188,6 +190,8 @@ public class criente1 extends Component {
       handleSpawn(txt);
     } else if (txt.startsWith("pos:")) {
       handlePos(txt);
+    }else if (txt.startsWith("rot:")) {
+      handleRot(txt);
     } else if (txt.startsWith("left:")) {
       handleLeft(txt);
     } else {
@@ -234,9 +238,33 @@ public class criente1 extends Component {
     float x = Float.parseFloat(p[2]);
     float y = Float.parseFloat(p[3]);
     float z = Float.parseFloat(p[4]);
-    posCache.put(id, new float[] {x, y, z});
-  }
 
+    for (int i = 0; i < maxPlayer; i++) {
+      if (remoteId[i] == id) {
+        posCache[i][0] = x;
+        posCache[i][1] = y;
+        posCache[i][2] = z;
+        break;
+      }
+    }
+  }
+  private void handleRot(String txt){
+     String[] p = txt.split(":");
+    int id = Integer.parseInt(p[1]);
+    if (id == myId) return;
+    float x = Float.parseFloat(p[2]);
+    float y = Float.parseFloat(p[3]);
+    float z = Float.parseFloat(p[4]);
+
+    for (int i = 0; i < maxPlayer; i++) {
+      if (remoteId[i] == id) {
+        rotCache[i][0] = x;
+        rotCache[i][1] = y;
+        rotCache[i][2] = z;
+        break;
+      }
+    }
+  }
   private void handleLeft(String txt) {
     final int id = Integer.parseInt(txt.substring(0));
     runOnMain(
