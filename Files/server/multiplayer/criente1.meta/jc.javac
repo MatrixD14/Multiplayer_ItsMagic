@@ -266,7 +266,8 @@ public class criente1 extends Component {
     }
   }
   private void handleLeft(String txt) {
-    final int id = Integer.parseInt(txt.substring(0));
+    String[] p = txt.split(":");
+    final int id = Integer.parseInt(p[1]);
     runOnMain(
         () -> {
           for (int is = 0; is < maxPlayer; is++) {
