@@ -118,14 +118,15 @@ public class server1 extends Component {
           for (int i = 0; i < maxPlayer; i++) {
             if (clients[slot] != null && i != slot && clientId[i] != 0 && clientName[i] != null) {
               String exists = "spaw:" + clientId[i] + ":" + clientName[i] + ":0:1:0";
-              sendClient(client,exists);
+              sendClient(client, exists);
             }
           }
           String spaw = "spaw:" + clientId[slot] + ":" + nome + ":0:1:0";
-          broadcast(spaw,client);
-        }else if(line.startsWith("pos:"))broadcast(line, client);
+          broadcast(spaw, client);
+        } else if (line.startsWith("pos:")) broadcast(line, client);
+        else if (line.startsWith("rot:")) broadcast(line, client);
         broadcast(line, client);
-      }
+      } 
     } catch (Exception e) {
       Console.log("Erro client: " + e.getMessage());
     } finally {
