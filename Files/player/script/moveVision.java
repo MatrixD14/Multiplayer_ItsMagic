@@ -3,8 +3,7 @@ public class moveVision extends Component {
   private Characterbody charac = null;
   private float speedJ = 3, speedS = 1f, camv, camh;
   public float x, y;
-  @Singleton
-  private criente1 serve;
+
   void start() {
     charac = myObject.getPhysics().getPhysicsEntity();
     joy = Input.getAxisValue("joy");
@@ -41,7 +40,6 @@ public class moveVision extends Component {
 
   private void move(float x, float y) {
     charac.setSpeed(-x, -y);
-    serve.upMovePlay(x,0,y);
   }
 
   private void vision(float x, float y) {
