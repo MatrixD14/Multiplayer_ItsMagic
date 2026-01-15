@@ -3,15 +3,17 @@ import java.net.Socket;
 public class server1 extends Component {
   private int port = 5000, maxPlayer = 10;
   ServerSocket server;
-  volatile boolean running = false, checktrue = false;
+  @Hide public volatile boolean running = false, checktrue = false;
   private Socket[] clients = new Socket[maxPlayer];
   private int[] clientId = new int[maxPlayer];
   private String[] clientName = new String[maxPlayer];
+//  private int geraSeed;
 
   void repeat() {
     if (Input.isKeyDown("serv")) {
       if (running) stop();
       else play();
+     // geraSeed = Random.range(100, 999);
     }
   }
 
@@ -21,7 +23,7 @@ public class server1 extends Component {
       return;
     }
     running = true;
-    Console.log("Iniciando servidor na porta " + port);
+    Terminal.log("Iniciando servidor na porta " + port);
     Toast.showText("Iniciando servidor na porta " + port, 1);
 
     new AsyncTask(
@@ -40,7 +42,7 @@ public class server1 extends Component {
                   }
                   clients[slot] = client;
                   clientId[slot] = slot + 1;
-                  Console.log("Cliente conectado: " + client.getInetAddress());
+                  Terminal.log("Cliente conectado: " + client.getInetAddress());
                   Toast.showText("Cliente conectado: " + client.getInetAddress(), 1);
 
                   new AsyncTask(
@@ -56,12 +58,12 @@ public class server1 extends Component {
                 } catch (SocketException se) {
                   break;
                 } catch (IOException ioe) {
-                  Console.log("Accept erro: " + ioe.getMessage());
+                  Terminal.log("Accept erro: " + ioe.getMessage());
                   Toast.showText("Accept erro: " + ioe.getMessage(), 1);
                 }
               }
             } catch (Exception e) {
-              Console.log("Erro servidor: " + e.getMessage());
+              Terminal.log("Erro servidor: " + e.getMessage());
               Toast.showText("Erro servidor: " + e.getMessage(), 1);
             }
             return null;
@@ -80,7 +82,7 @@ public class server1 extends Component {
     try {
       if (server != null && !server.isClosed()) server.close();
     } catch (IOException e) {
-      Console.log("Erro ao fechar ServerSocket: " + e.getMessage());
+      Terminal.log("Erro ao fechar ServerSocket: " + e.getMessage());
     }
 
     for (int i = 0; i < maxPlayer; i++) {
@@ -94,7 +96,7 @@ public class server1 extends Component {
         clientName[i] = null;
       }
     }
-    Console.log("Servidor parado e clientes desconectados.");
+    Terminal.log("Servidor parado e clientes desconectados.");
     Toast.showText("Servidor parado!", 1);
   }
 
@@ -109,26 +111,35 @@ public class server1 extends Component {
     try {
       BufferedReader rend = new BufferedReader(new InputStreamReader(client.getInputStream(), "UTF-8"));
       String line;
-
+      StringBuilder sbId = new StringBuilder(64), exists = new StringBuilder(64), spaw = new StringBuilder(64);
       while (running && !client.isClosed() && (line = rend.readLine()) != null) {
         if (line.startsWith("join:")) {
+          sbId.setLength(0);
           String nome = line.substring(5);
           clientName[slot] = nome;
-          sendClient(client, "id:" + clientId[slot]);
+          sbId.append("id:").append(clientId[slot]);
+          sendClient(client, sbId.toString());
+         // spaw.setLength(0);
+         // spaw.append("seed:0:").append(geraSeed);
+        //  sendClient(client, spaw.toString());
           for (int i = 0; i < maxPlayer; i++) {
-            if (clients[slot] != null && i != slot && clientId[i] != 0 && clientName[i] != null) {
-              String exists = "spaw:" + clientId[i] + ":" + clientName[i] + ":0:1:0";
-              sendClient(client, exists);
+            if (clients[i] != null && i != slot && clientId[i] != 0 && clientName[i] != null) {
+              exists.setLength(0);
+              exists.append("spaw:").append(clientId[i]).append(":").append(clientName[i]).append(":0:1:0");
+              sendClient(client, exists.toString());
             }
-          }
-          String spaw = "spaw:" + clientId[slot] + ":" + nome + ":0:1:0";
-          broadcast(spaw, client);
-        } else if(line.startsWith("pos:")|| line.startsWith("rot")) broadcast(line, client);
-        else if (!line.startsWith("join:")) broadcast(line, client);
-        broadcast(line, client);
-      } 
+          } 
+          /*spaw.setLength(0);
+          spaw.append("seed:0:").append(geraSeed);
+          broadcast(spaw.toString(), null);*/
+          spaw.setLength(0);
+          spaw.append("spaw:").append(clientId[slot]).append(":").append(nome).append(":0:1:0");
+          broadcast(spaw.toString(), client);       
+        } else if (line.startsWith("pos:") || line.startsWith("rot:")) broadcast(line, client);
+        else broadcast(line, client);
+      }
     } catch (Exception e) {
-      Console.log("Erro client: " + e.getMessage());
+      Terminal.log("Erro client: " + e.getMessage());
     } finally {
       if (clientId[slot] != 0) broadcast("left:" + clientId[slot], null);
       try {
@@ -138,17 +149,18 @@ public class server1 extends Component {
       clients[slot] = null;
       clientId[slot] = 0;
       clientName[slot] = null;
-      Console.log("Cliente desconectado: " + slot);
+      Terminal.log("Cliente desconectado: " + slot);
     }
   }
 
   private synchronized void broadcast(String msg, Socket sender) {
-    String full = msg + "\n";
+    StringBuilder full = new StringBuilder(msg.length() + 1);
+    full.append(msg).append("\n");
     byte[] data;
     try {
-      data = full.getBytes("UTF-8");
+      data = full.toString().getBytes("UTF-8");
     } catch (Exception e) {
-      data = full.getBytes();
+      data = full.toString().getBytes();
     }
     for (int i = 0; i < maxPlayer; i++) {
       Socket s = clients[i];
@@ -165,7 +177,7 @@ public class server1 extends Component {
         out.write(data);
         out.flush();
       } catch (Exception e) {
-        Console.log("Erro broadcast: " + e.getMessage());
+        Terminal.log("Erro broadcast: " + e.getMessage());
         try {
           s.close();
         } catch (Exception es) {
@@ -179,8 +191,10 @@ public class server1 extends Component {
 
   private void sendClient(Socket s, String msg) {
     try {
+      StringBuilder sb = new StringBuilder(msg.length() + 1);
+      sb.append(msg).append("\n");
       OutputStream out = s.getOutputStream();
-      out.write((msg + "\n").getBytes("UTF-8"));
+      out.write(sb.toString().getBytes("UTF-8"));
       out.flush();
     } catch (Exception e) {
     }
