@@ -5,39 +5,48 @@ import java.io.OutputStream;
 public class criente1 extends Component {
   private String host = "", msg = "", nome;
   private int port = 5000, maxPlayer = 10, myId = 0;
-  Socket socket;
+  private Socket socket;
   private volatile boolean connected = false;
-  public SpatialObject localPlayer;
+  private SpatialObject localPlayer;
   public ObjectFile localplay, amigo;
+
   private int[] remoteId;
   private String[] remoteName;
   private SpatialObject[] remotePlay;
-  float[][] posCache, rotCache;
+  private Vector3Buffer posCache, rotCache, posBufferCache, rotBufferCache;
   private Queue<Runnable> queue = new ConcurrentLinkedQueue<Runnable>();
 
-  private SUIText txts;
+  private UITextView txt;
   private server1 checkServe;
+  private handleProtocolo protocolo = new handleProtocolo();
+ // private dangeonGeration seedgera;
 
   void start() {
     if (maxPlayer <= 0) maxPlayer = 10;
     remoteId = new int[maxPlayer];
     remoteName = new String[maxPlayer];
     remotePlay = new SpatialObject[maxPlayer];
-    posCache = new float[maxPlayer][3];
-    rotCache = new float[maxPlayer][3];
-    txts = WorldController.findObject("Ip").findComponent("suitext");
+    posCache = BufferUtils.createVector3Buffer(maxPlayer);
+    rotCache = BufferUtils.createVector3Buffer(maxPlayer);
+    posBufferCache = BufferUtils.createVector3Buffer(maxPlayer);
+    rotBufferCache = BufferUtils.createVector3Buffer(maxPlayer);
+    txt = WorldController.findObject("Ip").findComponent("TextView");
     checkServe = myObject.findComponent("server1");
-  } 
+    //seedgera = WorldController.findObject("dangeon").findComponent("dangeonGeration");
+  }
 
   void repeat() {
     Runnable r;
     while ((r = queue.poll()) != null) r.run();
     for (int i = 0; i < maxPlayer; i++) {
       if (remotePlay[i] != null && remoteId[i] != 0) {
-        remotePlay[i].setPosition(posCache[i][0], posCache[i][1], posCache[i][2]);
-        remotePlay[i].setRotation(rotCache[i][0], rotCache[i][1], rotCache[i][2]);
+        float px = posCache.getX(i), py = posCache.getY(i), pz = posCache.getZ(i);
+        float rx = rotCache.getX(i), ry = rotCache.getY(i), rz = rotCache.getZ(i);
+        remotePlay[i].setPosition(px, py, pz);
+        remotePlay[i].setRotation(rx, ry, rz);
       }
     }
+    swap();
     if (Input.isKeyDown("serv") && !checkServe.running) {
       InputDialog inputN =
           new InputDialog(
@@ -50,10 +59,11 @@ public class criente1 extends Component {
                   nome = t;
                   host = "localhost";
                   connect();
-                }
+                } 
 
                 public void onCancel() {}
               });
+              
     }
     if (Input.isKeyDown("IP")) {
       InputDialog inputV =
@@ -65,7 +75,7 @@ public class criente1 extends Component {
               new InputDialogListener() {
                 public void onFinish(String t) {
                   host = t;
-                  txts.setText("IP: " + t);
+                  txt.setText("IP: " + t);
                   connect();
                 }
 
@@ -81,7 +91,7 @@ public class criente1 extends Component {
                 new InputDialogListener() {
                   public void onFinish(String t) {
                     nome = t;
-                    txts.setText("nome: " + t);
+                    txt.setText("nome: " + t);
                   }
 
                   public void onCancel() {}
@@ -115,9 +125,9 @@ public class criente1 extends Component {
           public void onEngine(Object result) {
             String msgResult = (String) result;
             Toast.showText(msgResult, 1);
-            Console.log(msgResult);
+            Terminal.log(msgResult);
             if (connected) {
-              txts.setText("IP: " + socket.getInetAddress().getHostAddress());
+              txt.setText("IP: " + socket.getInetAddress().getHostAddress());
               startListening();
             }
           }
@@ -146,7 +156,7 @@ public class criente1 extends Component {
           }
 
           public void onEngine(Object result) {
-            if (result != null && connected) Console.log(result.toString());
+            if (result != null && connected) Terminal.log(result.toString());
           }
         });
   }
@@ -165,16 +175,17 @@ public class criente1 extends Component {
                 new AsyncRunnable() {
                   public Object onBackground(Object input) {
                     try {
+                      StringBuilder sb = new StringBuilder();
+                      OutputStream out = socket.getOutputStream();
                       while (connected && socket != null && !socket.isClosed()) {
+                        sb.setLength(0);
                         Vector3 pos = localPlayer.getPosition();
                         Quaternion rot = localPlayer.getRotation();
-                        String posMsg = "pos:" + myId + ":" + pos.x + ":" + pos.y + ":" + pos.z;
-                        String rotMsg = "rot:" + myId + ":" + rot.x + ":" + rot.y + ":" + rot.z;
-                        OutputStream out = socket.getOutputStream();
-                        out.write((posMsg + "\n").getBytes("UTF-8"));
-                        out.write((rotMsg + "\n").getBytes("UTF-8"));
+                        sb.append("pos:").append(myId).append(":").append(pos.x).append(":").append(pos.y).append(":").append(pos.z).append("\n");
+                        sb.append("rot:").append(myId).append(":").append(rot.x).append(":").append(rot.y).append(":").append(rot.z).append("\n");
+                        out.write(sb.toString().getBytes("UTF-8"));
                         out.flush();
-                        Thread.sleep(50);
+                        Thread.sleep(10);
                       }
                     } catch (Exception e) {
                       desconnect();
@@ -188,15 +199,17 @@ public class criente1 extends Component {
 
     } else if (txt.startsWith("spaw:")) {
       handleSpawn(txt);
+    /*} else if (txt.startsWith("seed:")) {
+      handleSeed(txt);*/
     } else if (txt.startsWith("pos:")) {
-      handlePos(txt);
-    }else if (txt.startsWith("rot:")) {
-      handleRot(txt);
+      protocolo.handlePos(txt, myId, posCache, remoteId, maxPlayer);
+    } else if (txt.startsWith("rot:")) {
+      protocolo.handleRot(txt, myId, rotCache, remoteId, maxPlayer);
     } else if (txt.startsWith("left:")) {
       handleLeft(txt);
     } else {
       Toast.showText(txt, 1);
-      Console.log(txt);
+      Terminal.log(txt);
     }
   }
 
@@ -231,40 +244,6 @@ public class criente1 extends Component {
         });
   }
 
-  private void handlePos(String txt) {
-    String[] p = txt.split(":");
-    int id = Integer.parseInt(p[1]);
-    if (id == myId) return;
-    float x = Float.parseFloat(p[2]);
-    float y = Float.parseFloat(p[3]);
-    float z = Float.parseFloat(p[4]);
-
-    for (int i = 0; i < maxPlayer; i++) {
-      if (remoteId[i] == id) {
-        posCache[i][0] = x;
-        posCache[i][1] = y;
-        posCache[i][2] = z;
-        break;
-      }
-    }
-  }
-  private void handleRot(String txt){
-     String[] p = txt.split(":");
-    int id = Integer.parseInt(p[1]);
-    if (id == myId) return;
-    float x = Float.parseFloat(p[2]);
-    float y = Float.parseFloat(p[3]);
-    float z = Float.parseFloat(p[4]);
-
-    for (int i = 0; i < maxPlayer; i++) {
-      if (remoteId[i] == id) {
-        rotCache[i][0] = x;
-        rotCache[i][1] = y;
-        rotCache[i][2] = z;
-        break;
-      }
-    }
-  }
   private void handleLeft(String txt) {
     String[] p = txt.split(":");
     final int id = Integer.parseInt(p[1]);
@@ -285,6 +264,17 @@ public class criente1 extends Component {
         });
   }
 
+/* public void handleSeed(String txt) {
+    final String[] p = txt.split(":");
+    int id = Integer.parseInt(p[1]);
+    if (id == myId) return;
+    runOnMain(
+        () -> {
+          seedgera.setSeed(Integer.parseInt(p[2]));
+          seedgera.armGerador();
+        });
+  }*/
+
   void desconnect() {
     connected = false;
     try {
@@ -293,5 +283,13 @@ public class criente1 extends Component {
     } catch (Exception e) {
       Toast.showText("Desconnect", 1);
     }
+  }
+
+  private void swap() {
+    Vector3Buffer tmpPos = posCache, tmpRot = rotCache;
+    posCache = posBufferCache;
+    posBufferCache = tmpPos;
+    rotCache = rotBufferCache;
+    rotBufferCache = tmpRot;
   }
 }
